@@ -1,0 +1,11 @@
+{
+  "name": "sales-tracker-saas",
+  "private": true,
+  "workspaces": ["server", "mobile-app", "admin-panel"],
+  "scripts": {
+    "dev": "concurrently \"npm run dev -w server\" \"npm run dev -w mobile-app\" \"npm run dev -w admin-panel\"",
+    "seed": "npm run seed -w server",
+    "test": "npm run test -w server"
+  },
+  "devDependencies": { "concurrently": "^9.1.0" }
+}

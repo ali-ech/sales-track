@@ -1,0 +1,1 @@
+self.addEventListener('install',e=>e.waitUntil(caches.open('sales-v1').then(c=>c.addAll(['/']))));self.addEventListener('fetch',e=>{if(e.request.method==='GET')e.respondWith(caches.match(e.request).then(c=>c||fetch(e.request).then(r=>{const x=r.clone();caches.open('sales-v1').then(c=>c.put(e.request,x));return r}).catch(()=>c)))});
