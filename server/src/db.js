@@ -1,11 +1,11 @@
-import Database from 'better-sqlite3';
-import fs from 'node:fs'; import path from 'node:path';
-const dataDir = path.resolve('data'); fs.mkdirSync(dataDir, { recursive: true });
-const registryPath = path.join(dataDir, 'registry.sqlite');
-export const registry = new Database(registryPath); registry.pragma('journal_mode = WAL');
-registry.exec(`CREATE TABLE IF NOT EXISTS businesses (id TEXT PRIMARY KEY, name TEXT NOT NULL, db_name TEXT UNIQUE NOT NULL, active INTEGER DEFAULT 1, created_at TEXT DEFAULT CURRENT_TIMESTAMP);
-CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, business_id TEXT, email TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, role TEXT NOT NULL CHECK(role IN ('SUPER_ADMIN','OWNER','STAFF')), active INTEGER DEFAULT 1, created_at TEXT DEFAULT CURRENT_TIMESTAMP);`);
-export function tenantDb(dbName) { const db = new Database(path.join(dataDir, dbName)); db.pragma('journal_mode = WAL'); db.exec(`CREATE TABLE IF NOT EXISTS sales (id TEXT PRIMARY KEY, amount REAL NOT NULL CHECK(amount > 0), note TEXT DEFAULT '', sold_at TEXT NOT NULL, created_by TEXT NOT NULL, updated_at TEXT NOT NULL, deleted_at TEXT, version INTEGER DEFAULT 1);
-CREATE TABLE IF NOT EXISTS activity_logs (id TEXT PRIMARY KEY, actor_id TEXT NOT NULL, action TEXT NOT NULL, detail TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP);
-CREATE TABLE IF NOT EXISTS sync_events (id TEXT PRIMARY KEY, device_id TEXT, status TEXT NOT NULL, detail TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP);`); return db; }
-export function business(id) { return registry.prepare('SELECT * FROM businesses WHERE id=?').get(id); }
+import 'dotenv/config';
+import { MongoClient } from 'mongodb';
+import crypto from 'node:crypto';
+
+let registryClient; let indexesReady; const tenantClients=new Map();
+const registryName=process.env.REGISTRY_DATABASE||'sales_tracker_registry';
+function encryptionKey(){const value=process.env.TENANT_URI_ENCRYPTION_KEY;if(!value)throw Error('TENANT_URI_ENCRYPTION_KEY is required');return crypto.createHash('sha256').update(value).digest()}
+export function encrypt(value){const iv=crypto.randomBytes(12),cipher=crypto.createCipheriv('aes-256-gcm',encryptionKey(),iv);const body=Buffer.concat([cipher.update(value,'utf8'),cipher.final()]);return `${iv.toString('base64')}.${cipher.getAuthTag().toString('base64')}.${body.toString('base64')}`}
+export function decrypt(value){const [iv,tag,body]=value.split('.').map(x=>Buffer.from(x,'base64'));const cipher=crypto.createDecipheriv('aes-256-gcm',encryptionKey(),iv);cipher.setAuthTag(tag);return Buffer.concat([cipher.update(body),cipher.final()]).toString('utf8')}
+export async function registry(){if(!process.env.REGISTRY_MONGODB_URI)throw Error('REGISTRY_MONGODB_URI is required');if(!registryClient){registryClient=new MongoClient(process.env.REGISTRY_MONGODB_URI);await registryClient.connect()}const db=registryClient.db(registryName);if(!indexesReady){await Promise.all([db.collection('businesses').createIndex({id:1},{unique:true}),db.collection('user_lookup').createIndex({email:1},{unique:true}),db.collection('users').createIndex({email:1},{unique:true})]);indexesReady=true}return db}
+export async function tenantDb(uri,name){const key=crypto.createHash('sha256').update(uri).digest('hex');let client=tenantClients.get(key);if(!client){client=new MongoClient(uri,{maxPoolSize:5});await client.connect();tenantClients.set(key,client)}const db=client.db(name);await Promise.all([db.collection('sales').createIndex({id:1},{unique:true}),db.collection('users').createIndex({email:1},{unique:true}),db.collection('sales').createIndex({soldAt:-1})]);return db}

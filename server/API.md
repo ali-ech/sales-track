@@ -1,11 +1,11 @@
 # API overview
 
-All protected endpoints require `Authorization: Bearer <JWT>`. `POST /api/auth/login` returns a token and role. Super-admin endpoints are under `/api/admin`; business endpoints automatically resolve the caller's business database from the signed token.
+All protected endpoints require `Authorization: Bearer <JWT>`. `POST /api/auth/login` returns a token and role. Super-admin endpoints are under `/api/admin`; business endpoints automatically resolve the caller's encrypted MongoDB connection mapping from the signed token.
 
 | Method | Endpoint | Purpose |
 |---|---|---|
 | POST | `/api/auth/login` | Sign in |
-| GET/POST | `/api/admin/businesses` | List/create businesses (super admin) |
+| GET/POST | `/api/admin/businesses` | List/create businesses (super admin; creation requires customer MongoDB URI and database name) |
 | PATCH | `/api/admin/businesses/:id` | Activate/deactivate business |
 | GET | `/api/admin/status`, `/api/admin/reports`, `/api/admin/sync-logs` | System metrics, totals and recent sync audit |
 | GET/POST | `/api/sales` | List/add sales |
